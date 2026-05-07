@@ -1,0 +1,30 @@
+name: Build and Deploy
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout codigo
+      uses: actions/checkout@v4
+    - name: Login a DockerHub
+      run: echo "${{ secrets.DHUB_TOKEN }}" | docker login -u "${{ secrets.DHUB_USER }}" --password-stdin
+    - name: Build imagen Docker
+      run: docker build -t ${{ secrets.DHUB_USER }}/fastapi:latest .
+    - name: Push a DockerHub
+      run: docker push ${{ secrets.DHUB_USER }}/fastapi:latest
+    - name: Desplegar en AWS
+      uses: appleboy/ssh-action@v1.0.0
+      with:
+        host: ${{ secrets.EC2_IP }}
+        username: ${{ secrets.EC2_USER }}
+        key: ${{ secrets.EC2_KEY }}
+        script: |
+          docker stop api-merino || true
+          docker rm api-merino || true
+          docker pull ${{ secrets.DHUB_USER }}/api-merino:latest
+          docker run -d --name api-merino -p 80:8000 ${{ secrets.DHUB_USER }}/api-merino:latest
